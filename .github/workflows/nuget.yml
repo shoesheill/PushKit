@@ -78,8 +78,11 @@ jobs:
     # -------------------------
     - name: Publish to NuGet
       run: |
-        # Use Case-Sensitive filename: PushKit.Core
-        dotnet nuget push ./nupkg/PushKit.Core.*.nupkg \
+        # List files to verify the exact name in the logs
+        ls ./nupkg
+        
+        # Push all .nupkg files found in the output directory
+        dotnet nuget push "./nupkg/*.nupkg" \
           --api-key "${{ secrets.NUGET_API_KEY }}" \
           --source "https://api.nuget.org/v3/index.json" \
           --skip-duplicate
