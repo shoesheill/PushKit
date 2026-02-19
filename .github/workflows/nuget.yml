@@ -3,7 +3,7 @@ name: Publish Pushkit to NuGet
 on:
   push:
     tags:
-      - 'v[0-10]+.*'
+      - 'v[0-9]+.*'
 
 permissions:
   contents: write
