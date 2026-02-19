@@ -4,13 +4,27 @@
 		<TargetFrameworks></TargetFrameworks>
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
-		<LangVersion>latest</LangVersion>
+		<PropertyGroup>
+			<TargetFrameworks>netstandard2.1;net9.0;net10.0</TargetFrameworks>
+			<LangVersion>latest</LangVersion>
+		</PropertyGroup>
+
+		<PropertyGroup Condition="'$(TargetFramework)' == 'netstandard2.1'">
+			<LangVersion>8.0</LangVersion>
+		</PropertyGroup>
+
+		<PropertyGroup Condition="'$(TargetFramework)' == 'net9.0'">
+			<LangVersion>9.0</LangVersion>
+		</PropertyGroup>
+		<PropertyGroup Condition="'$(TargetFramework)' == 'net10.0'">
+			<LangVersion>10.0</LangVersion>
+		</PropertyGroup>
 
 		<!-- NuGet Package Metadata -->
 		<PackageId>PushKit</PackageId>
 		<Version>1.0.0</Version>
-		<Authors>YourName</Authors>
-		<Company>YourCompany</Company>
+		<Authors>Sushil Shrestha</Authors>
+		<!--<Company>YourCompany</Company>-->
 		<Description>Production-grade FCM + native APNs push library for .NET. Supports Android, iOS, and Web.</Description>
 		<PackageTags>FCM;APNs;Firebase;Apple;Push;Notification;Android;iOS;Web</PackageTags>
 		<PackageProjectUrl>https://github.com/yourname/pushkit</PackageProjectUrl>
@@ -20,7 +34,6 @@
 		<PackageReadmeFile>README.md</PackageReadmeFile>
 		<GenerateDocumentationFile>true</GenerateDocumentationFile>
 		<Nullable>enable</Nullable>
-		<TargetFramework>net10.0</TargetFramework>
 	</PropertyGroup>
 
 	<!-- Include README in package -->
@@ -46,6 +59,11 @@
 		<PackageReference Update="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
 		<PackageReference Update="Microsoft.Extensions.Options" Version="10.0.0" />
 		<PackageReference Update="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.0" />
+	</ItemGroup>
+	<ItemGroup>
+		<None Include="$(MSBuildThisFileDirectory)/../../README.md" Pack="true" PackagePath="\"/>
+		<!-- or if README is in the same directory as the project file -->
+		<!-- <None Include="README.md" Pack="true" PackagePath="\" /> -->
 	</ItemGroup>
 
 </Project>
