@@ -1,0 +1,70 @@
+name: Publish Pushkit to NuGet
+
+on:
+  push:
+    tags:
+      - 'v[0-10]+.*'
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    # -------------------------
+    # Extract Version from Tag (v1.0.1 -> 1.0.1)
+    # -------------------------
+    - name: Extract version
+      id: get_version
+      run: |
+        TAG=${GITHUB_REF#refs/tags/}
+        VERSION=${TAG#v}
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+    # -------------------------
+    # Setup .NET
+    # -------------------------
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: "10.0.x"
+
+    # -------------------------
+    # Restore, Build & Pack ONLY Pushkit.core
+    # -------------------------
+    - name: Restore
+      run: dotnet restore src/Pushkit.core/Pushkit.core.csproj
+
+    - name: Build & Pack
+      run: |
+        VERSION=${{ steps.get_version.outputs.version }}
+        
+        # Build specifically the core project in the src folder
+        dotnet build src/Pushkit.core/Pushkit.core.csproj \
+          --configuration Release \
+          --no-restore \
+          /p:Version=$VERSION
+
+        # Pack specifically the core project
+        dotnet pack src/Pushkit.core/Pushkit.core.csproj \
+          --configuration Release \
+          --output ./nupkg \
+          --no-build \
+          /p:PackageVersion=$VERSION
+
+    # -------------------------
+    # Publish to NuGet
+    # -------------------------
+    - name: Publish to NuGet
+      run: |
+        dotnet nuget push ./nupkg/Pushkit.core.*.nupkg \
+          --api-key "${{ secrets.NUGET_API_KEY }}" \
+          --source "https://api.nuget.org/v3/index.json" \
+          --skip-duplicate
