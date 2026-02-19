@@ -4,7 +4,6 @@ on:
   push:
     tags:
       - 'v[0-9]+.*'
-
   workflow_dispatch:
     inputs:
       version:
@@ -26,14 +25,21 @@ jobs:
         fetch-depth: 0
 
     # -------------------------
-    # Extract Version from Tag (v1.0.1 -> 1.0.1)
+    # Extract Version (Handles both Tag and Manual Input)
     # -------------------------
     - name: Extract version
       id: get_version
       run: |
-        TAG=${GITHUB_REF#refs/tags/}
-        VERSION=${TAG#v}
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          # Use manual input from the UI
+          VERSION="${{ github.event.inputs.version }}"
+        else
+          # Extract from tag (strips 'refs/tags/' and 'v')
+          RAW_TAG=${GITHUB_REF#refs/tags/}
+          VERSION=${RAW_TAG#v}
+        fi
         echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Processing version: $VERSION"
 
     # -------------------------
     # Setup .NET
@@ -44,7 +50,7 @@ jobs:
         dotnet-version: "10.0.x"
 
     # -------------------------
-    # Restore, Build & Pack ONLY Pushkit.core
+    # Restore, Build & Pack
     # -------------------------
     - name: Restore dependencies
       run: dotnet restore src/PushKit.Core/PushKit.Core.csproj
@@ -72,7 +78,8 @@ jobs:
     # -------------------------
     - name: Publish to NuGet
       run: |
-        dotnet nuget push ./nupkg/Pushkit.core.*.nupkg \
+        # Use Case-Sensitive filename: PushKit.Core
+        dotnet nuget push ./nupkg/PushKit.Core.*.nupkg \
           --api-key "${{ secrets.NUGET_API_KEY }}" \
           --source "https://api.nuget.org/v3/index.json" \
           --skip-duplicate
