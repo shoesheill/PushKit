@@ -5,6 +5,13 @@ on:
     tags:
       - 'v[0-9]+.*'
 
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (e.g., 1.0.0)'
+        required: true
+        default: '1.0.0'
+
 permissions:
   contents: write
 
