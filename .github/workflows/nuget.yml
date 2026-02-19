@@ -46,25 +46,26 @@ jobs:
     # -------------------------
     # Restore, Build & Pack ONLY Pushkit.core
     # -------------------------
-    - name: Restore
-      run: dotnet restore src/Pushkit.core/Pushkit.core.csproj
+    - name: Restore dependencies
+      run: dotnet restore src/PushKit.Core/PushKit.Core.csproj
 
-    - name: Build & Pack
+    - name: Build
       run: |
         VERSION=${{ steps.get_version.outputs.version }}
-        
-        # Build specifically the core project in the src folder
-        dotnet build src/Pushkit.core/Pushkit.core.csproj \
+        dotnet build src/PushKit.Core/PushKit.Core.csproj \
           --configuration Release \
           --no-restore \
           /p:Version=$VERSION
 
-        # Pack specifically the core project
-        dotnet pack src/Pushkit.core/Pushkit.core.csproj \
+    - name: Pack
+      run: |
+        VERSION=${{ steps.get_version.outputs.version }}
+        dotnet pack src/PushKit.Core/PushKit.Core.csproj \
           --configuration Release \
           --output ./nupkg \
           --no-build \
-          /p:PackageVersion=$VERSION
+          /p:PackageVersion=$VERSION \
+          /p:Version=$VERSION
 
     # -------------------------
     # Publish to NuGet
