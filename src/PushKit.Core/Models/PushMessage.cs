@@ -115,6 +115,14 @@ public sealed class ApnMessage
     /// <summary>apns-collapse-id: collapse multiple messages with the same key.</summary>
     public string? CollapseId { get; set; }
 
+    /// <summary>
+    /// apns-topic override. When null, the sender derives it from <c>ApnOptions.BundleId</c> —
+    /// appending ".voip" automatically when <see cref="PushType"/> is <see cref="ApnPushType.Voip"/>,
+    /// as Apple requires for VoIP/PushKit pushes. Set this only to force a specific topic
+    /// (e.g. a complication or file-provider subtopic).
+    /// </summary>
+    public string? Topic { get; set; }
+
     /// <summary>When true, validates payload without actual delivery (sandbox only).</summary>
     public bool ValidateOnly { get; set; }
 }

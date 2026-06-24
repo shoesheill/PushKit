@@ -197,6 +197,12 @@ public sealed class ApnMessageBuilder
 
     public ApnMessageBuilder WithCollapseId(string collapseId) { _msg.CollapseId = collapseId; return this; }
 
+    /// <summary>
+    /// Override the apns-topic. Leave unset to let the sender derive it from the configured BundleId
+    /// (it appends ".voip" automatically for <see cref="ApnPushType.Voip"/> pushes).
+    /// </summary>
+    public ApnMessageBuilder WithTopic(string topic) { _msg.Topic = topic; return this; }
+
     public ApnMessageBuilder WithPriority(int priority) { _msg.Priority = priority; return this; }
 
     public ApnMessageBuilder ExpiresIn(int seconds) { _msg.ExpirationSeconds = seconds; return this; }

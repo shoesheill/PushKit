@@ -127,7 +127,7 @@ internal sealed class ApnSender : IApnSender
         };
 
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
-        req.Headers.TryAddWithoutValidation("apns-topic", _options.BundleId);
+        req.Headers.TryAddWithoutValidation("apns-topic", ResolveTopic(message));
         req.Headers.TryAddWithoutValidation("apns-push-type", message.PushType.ToString().ToLowerInvariant());
         req.Headers.TryAddWithoutValidation("apns-priority", message.Priority.ToString());
 
@@ -158,6 +158,23 @@ internal sealed class ApnSender : IApnSender
         }
 
         return ParseApnError(target, resp, respBody);
+    }
+
+    /// <summary>
+    /// Resolves the apns-topic header. An explicit <see cref="ApnMessage.Topic"/> wins; otherwise the
+    /// bundle id is used, with a ".voip" suffix automatically appended for VoIP pushes — Apple rejects
+    /// a VoIP push (apns-push-type: voip) whose topic is not "{BundleId}.voip" with BadTopic (400).
+    /// </summary>
+    private string ResolveTopic(ApnMessage message)
+    {
+        if (!string.IsNullOrWhiteSpace(message.Topic))
+            return message.Topic;
+
+        if (message.PushType == ApnPushType.Voip &&
+            !_options.BundleId.EndsWith(".voip", StringComparison.OrdinalIgnoreCase))
+            return _options.BundleId + ".voip";
+
+        return _options.BundleId;
     }
 
     private PushResult ParseApnError(PushTarget target, HttpResponseMessage resp, string body)
