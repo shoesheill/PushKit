@@ -210,11 +210,28 @@ public class FcmSenderTests
 
     // ─── Fake HTTP Handlers ───────────────────────────────────────────────────
 
-    private sealed class FakeHttpHandler(HttpResponseMessage response) : HttpMessageHandler
+    private sealed class FakeHttpHandler : HttpMessageHandler
     {
+        private readonly HttpStatusCode _statusCode;
+        private readonly string _body;
+        private readonly string _mediaType;
+
+        public FakeHttpHandler(HttpResponseMessage response)
+        {
+            _statusCode = response.StatusCode;
+            _body = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+            _mediaType = response.Content.Headers.ContentType?.MediaType ?? "application/json";
+        }
+
+        // Each real HTTP call gets its own response/content instance, so concurrent
+        // batch sends must too — sharing one HttpResponseMessage across requests races
+        // on the underlying content stream.
         protected override Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request, CancellationToken cancellationToken) =>
-            Task.FromResult(response);
+            Task.FromResult(new HttpResponseMessage(_statusCode)
+            {
+                Content = new StringContent(_body, Encoding.UTF8, _mediaType)
+            });
     }
 
     private sealed class QueuedHttpHandler(Queue<HttpResponseMessage> responses) : HttpMessageHandler

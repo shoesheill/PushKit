@@ -189,7 +189,7 @@ public sealed class ApnMessageBuilder
     public ApnMessageBuilder WithCustomData(string key, object value) { _msg.CustomData[key] = value; return this; }
 
     /// <summary>JSON-serialize a complex object and store it under <paramref name="key"/>.</summary>
-    public ApnMessageBuilder WithCustomData<T>(string key, T value, JsonSerializerOptions? opts = null)
+    public ApnMessageBuilder WithCustomDataJson<T>(string key, T value, JsonSerializerOptions? opts = null)
     {
         _msg.CustomData[key] = JsonSerializer.Serialize(value, opts);
         return this;

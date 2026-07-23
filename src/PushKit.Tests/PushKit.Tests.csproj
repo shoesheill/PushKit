@@ -1,6 +1,9 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <!-- This project declares package versions inline; opt out of any Central Package Management
+         inherited from a parent directory (e.g. a drive-root Directory.Packages.props). -->
+	 <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
