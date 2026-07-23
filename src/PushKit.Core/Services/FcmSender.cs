@@ -108,6 +108,16 @@ internal sealed class FcmSender : IFcmSender
         {
             await semaphore.WaitAsync(ct);
             try { return await SendToTokenAsync(token, message, ct); }
+            catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+            {
+                // A single token's transport failure (timeout, dropped connection, etc.) must
+                // not blow up Task.WhenAll and lose every other result in the batch — isolate it
+                // as a retryable per-token failure instead. Real caller-requested cancellation
+                // still propagates.
+                var target = PushTarget.Token(token);
+                _logger.LogError(ex, "[FCM:Batch] Transport error for {Token}", target.Masked());
+                return PushResult.Failure(target, "TRANSPORT_ERROR", ex.Message);
+            }
             finally { semaphore.Release(); }
         });
 

@@ -1,5 +1,4 @@
 using System.Net.Http.Headers;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
@@ -14,26 +13,20 @@ namespace PushKit.Services;
 
 /// <summary>
 /// Sends native APNs messages directly to Apple's HTTP/2 servers using p8 ES256 JWT authentication.
-/// 
+///
 /// Advantages over CorePush:
-/// - JWT is cached and only refreshed after 45 minutes (Apple allows 60 min max; we're conservative)
+/// - JWT is cached and only refreshed after 45 minutes via the singleton <see cref="IApnJwtProvider"/>
+///   (Apple allows 60 min max; we're conservative)
 /// - Built-in batch parallelism cap to avoid Apple HTTP 429 throttling
 /// - Result-based error model — NEVER throws on APNs protocol errors
-/// - Thread-safe JWT generation via SemaphoreSlim
 /// - All push types supported: alert, background, voip, location, etc.
 /// </summary>
 internal sealed class ApnSender : IApnSender
 {
     private readonly HttpClient _http;
     private readonly ApnOptions _options;
+    private readonly IApnJwtProvider _jwtProvider;
     private readonly ILogger<ApnSender> _logger;
-
-    // JWT token cache — Apple allows up to 60 min; we refresh at 45 min to be safe
-    private string? _cachedJwt;
-    private DateTime _jwtExpiresAt = DateTime.MinValue;
-    private readonly SemaphoreSlim _jwtLock = new(1, 1);
-    private ECDsa? _ecdsa;
-    private const int JwtLifetimeMinutes = 45;
 
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
@@ -41,10 +34,11 @@ internal sealed class ApnSender : IApnSender
         WriteIndented = false
     };
 
-    public ApnSender(HttpClient http, IOptions<ApnOptions> options, ILogger<ApnSender> logger)
+    public ApnSender(HttpClient http, IOptions<ApnOptions> options, IApnJwtProvider jwtProvider, ILogger<ApnSender> logger)
     {
         _http = http;
         _options = options.Value;
+        _jwtProvider = jwtProvider;
         _logger = logger;
         ValidateConfiguration();
     }
@@ -96,6 +90,16 @@ internal sealed class ApnSender : IApnSender
         {
             await semaphore.WaitAsync(ct);
             try { return await SendAsync(token, message, ct); }
+            catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+            {
+                // A single token's transport failure (timeout, dropped connection, etc.) must
+                // not blow up Task.WhenAll and lose every other result in the batch — isolate it
+                // as a retryable per-token failure instead. Real caller-requested cancellation
+                // still propagates.
+                var target = PushTarget.Token(token);
+                _logger.LogError(ex, "[APNs:Batch] Transport error for {Token}", target.Masked());
+                return PushResult.Failure(target, "TRANSPORT_ERROR", ex.Message);
+            }
             finally { semaphore.Release(); }
         });
 
@@ -114,7 +118,7 @@ internal sealed class ApnSender : IApnSender
     {
         var host = _options.GetApnHost();
         var url = $"{host}/3/device/{deviceToken}";
-        var jwt = await GetOrRefreshJwtAsync(ct);
+        var jwt = await _jwtProvider.GetJwtAsync(ct);
         var payloadJson = BuildPayload(message);
         var target = PushTarget.Token(deviceToken);
 
@@ -233,66 +237,6 @@ internal sealed class ApnSender : IApnSender
 
         return JsonSerializer.Serialize(root, JsonOpts);
     }
-
-    // ─── JWT management ───────────────────────────────────────────────────────
-
-    private async Task<string> GetOrRefreshJwtAsync(CancellationToken ct)
-    {
-        if (_cachedJwt is not null && DateTime.UtcNow < _jwtExpiresAt)
-            return _cachedJwt;
-
-        await _jwtLock.WaitAsync(ct);
-        try
-        {
-            if (_cachedJwt is not null && DateTime.UtcNow < _jwtExpiresAt)
-                return _cachedJwt;
-
-            _cachedJwt = CreateJwt();
-            _jwtExpiresAt = DateTime.UtcNow.AddMinutes(JwtLifetimeMinutes);
-            _logger.LogDebug("[APNs] JWT refreshed. Valid until {Expiry:HH:mm:ss} UTC", _jwtExpiresAt);
-            return _cachedJwt;
-        }
-        finally
-        {
-            _jwtLock.Release();
-        }
-    }
-
-    private string CreateJwt()
-    {
-        var iat = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        var header = Base64UrlEncode(JsonSerializer.SerializeToUtf8Bytes(new { alg = "ES256", kid = _options.P8PrivateKeyId }));
-        var payload = Base64UrlEncode(JsonSerializer.SerializeToUtf8Bytes(new { iss = _options.TeamId, iat }));
-        var signingInput = Encoding.UTF8.GetBytes($"{header}.{payload}");
-
-        _ecdsa ??= LoadEcdsa();
-
-        var signature = _ecdsa.SignData(signingInput, HashAlgorithmName.SHA256);
-        return $"{header}.{payload}.{Base64UrlEncode(signature)}";
-    }
-
-    private ECDsa LoadEcdsa()
-    {
-        try
-        {
-            var keyBytes = Convert.FromBase64String(_options.P8PrivateKey.Trim());
-            var ecdsa = ECDsa.Create();
-            ecdsa.ImportPkcs8PrivateKey(keyBytes, out _);
-            return ecdsa;
-        }
-        catch (Exception ex)
-        {
-            throw new PushKitConfigurationException(
-                $"Failed to load APNs p8 private key: {ex.Message}. " +
-                "Ensure P8PrivateKey is the base64 content only (no header/footer/whitespace).");
-        }
-    }
-
-    private static string Base64UrlEncode(byte[] input) =>
-        Convert.ToBase64String(input)
-            .TrimEnd('=')
-            .Replace('+', '-')
-            .Replace('/', '_');
 
     private void ValidateConfiguration()
     {

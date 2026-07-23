@@ -42,7 +42,8 @@ public sealed class PushResult
         ErrorCode is
             "UNAVAILABLE" or "INTERNAL" or "QUOTA_EXCEEDED" or  // FCM
             "TooManyRequests" or "InternalServerError" or        // APNs
-            "ServiceUnavailable" or "Shutdown";                  // APNs
+            "ServiceUnavailable" or "Shutdown" or                // APNs
+            "TRANSPORT_ERROR";                                   // client-side timeout/network failure
 
     public static PushResult Success(PushTarget target, string messageId, int httpStatus = 200) =>
         new() { IsSuccess = true, Target = target, MessageId = messageId, HttpStatus = httpStatus };

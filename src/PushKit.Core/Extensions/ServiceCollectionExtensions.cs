@@ -82,6 +82,11 @@ public static class ServiceCollectionExtensions
         services.AddOptions<ApnOptions>().Validate(ValidateApnOptions,
             "ApnOptions: P8PrivateKey, P8PrivateKeyId, TeamId, and BundleId are all required.");
 
+        // Singleton: holds the cached provider JWT. Must outlive the typed HttpClient
+        // (which AddHttpClient<> always registers as Transient) or Apple throttles
+        // repeated token regeneration with 429 TooManyProviderTokenUpdates.
+        services.AddSingleton<IApnJwtProvider, ApnJwtProvider>();
+
         // APNs requires HTTP/2 — configure the primary handler accordingly
         services
             .AddHttpClient<IApnSender, ApnSender>("PushKit.Apn", (sp, client) =>
@@ -98,6 +103,12 @@ public static class ServiceCollectionExtensions
                 KeepAlivePingDelay = TimeSpan.FromSeconds(60),
                 KeepAlivePingTimeout = TimeSpan.FromSeconds(30)
             })
+            // AddHttpClient recycles its primary handler every 2 min by default, which would
+            // tear down these pooled HTTP/2 connections long before PooledConnectionIdleTimeout
+            // ever kicks in. Apple recommends keeping a small number of persistent connections
+            // open rather than reconnecting — let the SocketsHttpHandler's own idle/keep-alive
+            // settings above govern connection lifetime instead.
+            .SetHandlerLifetime(Timeout.InfiniteTimeSpan)
             .AddPolicyHandler((sp, _) =>
             {
                 var opts = sp.GetRequiredService<IOptions<ApnOptions>>().Value;
